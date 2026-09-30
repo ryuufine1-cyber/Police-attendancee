@@ -27,11 +27,8 @@ header{background:#111827;border-bottom:2px solid #334155}.banner{width:100%;max
 <div class="box">
 <img class="logo" src="logo.png" onerror="this.style.display='none'">
 <h1>POLICE DEPARTMENT</h1><p class="muted">Officer Attendance System</p>
-<input id="email" type="email" placeholder="Email">
-<input id="password" type="password" placeholder="Password">
-<button class="blue" onclick="signIn()">LOGIN</button>
-<button class="gray" onclick="signUp()">CREATE OFFICER ACCOUNT</button>
-<p id="loginMsg" class="small"></p>
+<button class="blue" onclick="signInWithDiscord()">LOGIN WITH DISCORD</button>
+<p id="loginMsg" class="small">Akses hanya untuk Discord yang sudah di-authorized.</p>
 </div></div>
 
 <div id="app" class="hidden">
@@ -101,8 +98,8 @@ header{background:#111827;border-bottom:2px solid #334155}.banner{width:100%;max
 </div>
 
 <script>
-const SUPABASE_URL="https://vxuxbxecnyyywocqzwtx.supabase.co";
-const SUPABASE_KEY="sb_publishable_JUSh0iOq0E_Z-nY80S3opA_ue4615vL"; // gunakan publishable/anon key, bukan service_role
+const SUPABASE_URL="PASTE_YOUR_SUPABASE_URL_HERE";
+const SUPABASE_KEY="PASTE_YOUR_PUBLISHABLE_KEY_HERE"; // gunakan publishable/anon key, bukan service_role
 const db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 
 const RANKS=[
@@ -126,19 +123,26 @@ const money=n=>new Intl.NumberFormat("id-ID",{style:"currency",currency:"IDR",ma
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
 
 function fillRanks(){rank.innerHTML=RANKS.map(x=>`<option>${x.name}</option>`).join("")}
-async function signUp(){
- const e=email.value.trim(),p=password.value;
- if(!e||p.length<6)return loginMsg.textContent="Email dan password minimal 6 karakter.";
- const {error}=await db.auth.signUp({email:e,password:p});
- loginMsg.textContent=error?error.message:"Akun dibuat. Jika email confirmation aktif, cek email lalu login.";
+function getRedirectUrl(){
+ return window.location.origin + window.location.pathname;
 }
-async function signIn(){
- const {data,error}=await db.auth.signInWithPassword({email:email.value.trim(),password:password.value});
- if(error)return loginMsg.textContent=error.message;
- await start(data.user);
+async function signInWithDiscord(){
+ loginMsg.textContent="Membuka Discord...";
+ const {error}=await db.auth.signInWithOAuth({
+  provider:"discord",
+  options:{redirectTo:getRedirectUrl()}
+ });
+ if(error)loginMsg.textContent=error.message;
 }
 async function start(u){
  user=u;
+ const {data:authz,error:authzError}=await db.rpc("authorize_discord");
+ if(authzError)return loginMsg.textContent="Gagal memeriksa authorization: "+authzError.message;
+ if(!authz?.authorized){
+  await db.auth.signOut();
+  loginMsg.textContent="Akun Discord ini belum di-authorized oleh admin.";
+  return;
+ }
  const {data,error}=await db.from("profiles").select("*").eq("id",u.id).single();
  if(error)return loginMsg.textContent=error.message;
  profile=data;login.classList.add("hidden");app.classList.remove("hidden");
